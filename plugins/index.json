@@ -19,6 +19,28 @@
       "logo_url": "https://raw.githubusercontent.com/slpk1ng/Lovomo_Plugin_Market/main/plugins/device-status/logo.png",
       "icon_url": "https://raw.githubusercontent.com/slpk1ng/Lovomo_Plugin_Market/main/plugins/device-status/icon.png",
       "updated": "2026-09-24"
+    },
+    {
+      "id": "meow-skin",
+      "name": "喵喵皮肤・回复追加",
+      "version": "1.0.1",
+      "author": "Lovomo 官方示例",
+      "github": "slpk1ng",
+      "description": "皮肤 + 功能二合一示例：重排侧边栏与卡片，可调背景图、主色、圆角、区块透明度、分隔线颜色与区块底色；另可设置每轮 LLM 回复结束后追加几条「喵～」文字和喵叫语音。装好后在左侧栏「插件」页点卡片进功能页配置。",
+      "type": "mixed",
+      "tags": [
+        "皮肤",
+        "功能",
+        "示例",
+        "教学"
+      ],
+      "homepage": "https://github.com/slpk1ng/Lovomo",
+      "page_url": "https://github.com/slpk1ng/Lovomo_Plugin_Market/tree/main/plugins/meow-skin",
+      "source_repo": "slpk1ng/Lovomo_Plugin_Market",
+      "download": "https://github.com/slpk1ng/Lovomo_Plugin_Market/releases/download/meow-skin-v1.0.1/meow-skin-1.0.1.zip",
+      "logo_url": "https://raw.githubusercontent.com/slpk1ng/Lovomo_Plugin_Market/main/plugins/meow-skin/logo.png",
+      "icon_url": "https://raw.githubusercontent.com/slpk1ng/Lovomo_Plugin_Market/main/plugins/meow-skin/icon.png",
+      "updated": "2026-09-24"
     }
   ],
   "version": 2,
