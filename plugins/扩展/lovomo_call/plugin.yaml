@@ -1,0 +1,79 @@
+id: lovomo_call
+name: 语音通话
+version: 1.0.0
+author: Slpk1ng
+description: "在浏览器里和角色打电话：说话→识别→角色回复→语音播回，可云可本地"
+type: mixed
+entry: main.py
+tags:
+  - 扩展
+  - 语音
+  - 通话
+category: 扩展
+panel:
+  label: 语音通话
+  title: 语音通话
+  html: webui.html
+features:
+  - key: retention
+    label: 留痕
+    type: select
+    default: text
+    options:
+      - value: none
+        label: 完全不留痕
+      - value: text
+        label: 只留文字（默认）
+      - value: full
+        label: 文字+原始录音
+    description: 通话留下什么。默认只把文字写进角色记忆，原始录音用完即删。
+  - key: remember
+    label: 记住这次通话
+    type: bool
+    default: true
+    description: 勾上后这一轮的文字会写进角色记忆；关掉则这通电话不留痕。
+  - key: lang
+    label: 识别语种
+    type: select
+    default: auto
+    options:
+      - value: auto
+        label: 自动
+      - value: zh
+        label: 中文
+      - value: ja
+        label: 日语
+      - value: en
+        label: 英语
+    description: 语音识别用的语种，默认自动判断。
+  - key: mode
+    label: 通话模式
+    type: select
+    default: duplex
+    options:
+      - value: duplex
+        label: 全双工（自动断句）
+      - value: ptt
+        label: 按住说话
+    description: 通话界面默认的说话方式，可在通话页/悬浮窗随时切换。
+  - key: sensitivity
+    label: 语音灵敏度
+    type: range
+    min: 4
+    max: 80
+    step: 2
+    default: 20
+    description: 能量门限，越小越容易触发；环境吵闹时调大。
+  - key: silence_ms
+    label: 断句停顿
+    type: range
+    min: 300
+    max: 2000
+    step: 100
+    default: 800
+    description: 说完后静音多久算一句结束（毫秒）。
+  - key: barge
+    label: 播放时可打断
+    type: bool
+    default: true
+    description: 角色说话时你一开口就停掉播放，并把这句当作新的一轮。

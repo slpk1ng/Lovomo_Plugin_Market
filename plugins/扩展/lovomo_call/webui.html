@@ -1,0 +1,1271 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>语音通话</title>
+<style>
+  :root {
+    --brand: var(--skin-accent, #2f7cf6);
+    --surface: #ffffff;
+    --line: rgba(0,0,0,.12);
+    --radius-card: 14px;
+    --ink: #1f2328;
+    --muted: #6b7280;
+    --danger: #d9534f;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; }
+  body { margin: 0; padding: 12px 14px 16px; min-height: 100vh;
+         font: 14px/1.6 "Microsoft YaHei", system-ui, -apple-system, sans-serif;
+         color: var(--ink); background: transparent;
+         display: flex; flex-direction: column; gap: 10px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px 10px; align-items: center;
+         padding: 8px 10px; border: 1px solid var(--line);
+         border-radius: var(--radius-card); background: var(--surface); }
+  .bar label { font-size: 12px; color: var(--muted); }
+  select, input[type=text] { font: inherit; padding: 3px 6px; border-radius: 8px;
+           border: 1px solid var(--line); background: var(--surface); color: inherit; }
+  input[type=range] { width: 86px; }
+  .chk { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; color: var(--muted); }
+  .pick { position: relative; display: inline-flex; }
+  button.icon { font: inherit; font-size: 12px; padding: 4px 10px; border-radius: 8px;
+                border: 1px solid var(--line); background: var(--surface); color: inherit; cursor: pointer; }
+  button.icon:disabled { opacity: .45; cursor: not-allowed; }
+  .picker { position: fixed; left: 0; top: 0; z-index: 30; width: 380px;
+            max-width: calc(100vw - 12px); max-height: calc(100vh - 90px);
+            display: none; flex-direction: column; gap: 6px; padding: 8px 10px;
+            border: 1px solid var(--line); border-radius: 12px; background: var(--surface);
+            box-shadow: 0 12px 28px rgba(0,0,0,.18); }
+  .picker.open { display: flex; }
+  .picker .pk-tools { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+  .picker .pk-tools input[type=text] { flex: 1 1 130px; min-width: 0; }
+  .picker .pk-list { flex: 1 1 auto; min-height: 60px; max-height: 210px; overflow-y: auto;
+                     display: flex; flex-direction: column; gap: 2px; }
+  .picker .pk-item { text-align: left; border: 1px solid transparent; border-radius: 8px;
+                     background: transparent; color: inherit; cursor: pointer; font: inherit;
+                     font-size: 13px; padding: 4px 6px; display: flex; gap: 6px; align-items: baseline; }
+  .picker .pk-item:hover { background: rgba(47,124,246,.08); }
+  .picker .pk-item.on { border-color: var(--brand); }
+  .picker .pk-name { flex: 0 0 auto; }
+  .picker .pk-sub { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+                    white-space: nowrap; font-size: 12px; color: var(--muted); }
+  .picker .pk-pager { display: flex; gap: 8px; align-items: center; justify-content: space-between;
+                      font-size: 12px; color: var(--muted); }
+  .stage { flex: 1 1 auto; overflow-y: auto; display: flex; flex-direction: column;
+           gap: 8px; padding: 4px 2px; }
+  .bubble { max-width: 78%; padding: 8px 12px; border-radius: var(--radius-card);
+            border: 1px solid var(--line); background: var(--surface);
+            white-space: pre-wrap; word-break: break-word; }
+  .bubble.me { align-self: flex-end; border-color: transparent; color: #fff; background: var(--brand); }
+  .bubble.role { align-self: flex-start; }
+  .bubble .who { display: block; font-size: 11px; opacity: .7; margin-bottom: 2px; }
+  .bubble.sys { align-self: center; font-size: 12px; color: var(--muted);
+                background: transparent; border-style: dashed; }
+  .bubble.err { align-self: center; border-color: var(--danger); color: var(--danger);
+                background: transparent; }
+  /* 被打断、没播完的那句台词：划线 + 「已打断」小标签，说明历史里为什么多这一句 */
+  .bubble.lc-cut .lc-text { text-decoration: line-through;
+                            text-decoration-color: var(--danger, #d9534f); }
+  .bubble .lc-cut-tag { display: inline-block; margin-left: 6px; padding: 0 6px;
+                        border-radius: 8px; font-size: 11px; line-height: 16px;
+                        vertical-align: 1px; white-space: nowrap;
+                        color: var(--danger, #d9534f); background: var(--surface, #fff);
+                        border: 1px solid var(--danger, #d9534f); }
+  audio { width: 100%; margin-top: 6px; }
+  .pad { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  #talk { width: 132px; height: 132px; border-radius: 50%; border: none; cursor: pointer;
+          background: var(--brand); color: #fff; font: 600 16px/1.2 inherit;
+          box-shadow: 0 6px 18px rgba(0,0,0,.18); touch-action: none; user-select: none;
+          transition: transform .08s ease, filter .15s ease; }
+  #talk.on { transform: scale(.96); filter: brightness(1.08);
+             animation: pulse 1.2s ease-in-out infinite; }
+  #talk[disabled] { filter: grayscale(.6); cursor: not-allowed; }
+  @keyframes pulse { 0%, 100% { box-shadow: 0 0 0 0 rgba(47,124,246,.45); }
+                     50% { box-shadow: 0 0 0 14px rgba(47,124,246,0); } }
+  .hint { font-size: 12px; color: var(--muted); text-align: center; min-height: 18px; }
+  .row { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
+  button.ghost { font: inherit; padding: 5px 14px; border-radius: 8px;
+                 border: 1px solid var(--line); background: var(--surface);
+                 color: inherit; cursor: pointer; }
+</style>
+</head>
+<body>
+  <div class="bar">
+    <label for="role">角色</label>
+    <select id="role"></select>
+    <label for="target">打给</label>
+    <select id="target" title="这一通和谁的聊天记在一起；默认只列最近 10 条私聊，用右边的「选对话」搜索更多"></select>
+    <span class="pick">
+      <button type="button" class="icon" id="pickBtn" title="搜索 / 筛选要打的对话（默认最近 10 条）">🔍 选对话</button>
+      <div class="picker" id="picker">
+        <div class="pk-tools">
+          <input type="text" id="pickSearch" placeholder="搜索称呼 / 会话 ID / 最近一句">
+          <select id="pickSort" title="排序">
+            <option value="newest">最近在前</option>
+            <option value="oldest">最旧在前</option>
+          </select>
+          <select id="pickDays" title="只看最近有聊天的对话">
+            <option value="0">全部时间</option>
+            <option value="7">近 7 天聊过</option>
+            <option value="30">近 30 天聊过</option>
+          </select>
+        </div>
+        <div class="pk-list" id="pickList"></div>
+        <div class="pk-pager">
+          <span id="pickInfo"></span>
+          <span>
+            <button type="button" class="icon" id="pickPrev">上一页</button>
+            <button type="button" class="icon" id="pickNext">下一页</button>
+          </span>
+        </div>
+      </div>
+    </span>
+    <label for="mode">模式</label>
+    <select id="mode">
+      <option value="duplex" selected>全双工（自动断句）</option>
+      <option value="ptt">按住说话</option>
+    </select>
+    <label for="retention">留痕</label>
+    <select id="retention">
+      <option value="none">完全不留痕</option>
+      <option value="text" selected>只留文字</option>
+      <option value="full">文字+原始录音</option>
+    </select>
+    <label for="lang">语言</label>
+    <select id="lang">
+      <option value="auto" selected>自动</option>
+      <option value="zh">中文</option>
+      <option value="ja">日语</option>
+      <option value="en">英语</option>
+    </select>
+    <label class="chk"><input type="checkbox" id="remember" checked>记住这次通话</label>
+    <label class="chk"><input type="checkbox" id="barge" checked>播放时可打断</label>
+    <label for="sens">灵敏度 <span id="sensVal">20</span></label>
+    <input type="range" id="sens" min="4" max="80" step="2" value="20">
+    <label for="sil">停顿 <span id="silVal">800</span>ms</label>
+    <input type="range" id="sil" min="300" max="2000" step="100" value="800">
+  </div>
+
+  <div class="stage" id="stage"></div>
+
+  <div class="pad">
+    <button id="talk">开始通话</button>
+    <div class="hint" id="hint">点「开始通话」后直接说话，说完停顿一下就会自动接话；也可以切到「按住说话」。</div>
+    <div class="row">
+      <button class="ghost" id="hangup">挂断</button>
+      <button class="ghost" id="mute">麦克风静音</button>
+      <button class="ghost" id="popout">弹出悬浮窗</button>
+      <button class="ghost" id="replay" hidden>重播</button>
+    </div>
+    <div class="row">
+      <input type="text" id="typed" size="26" placeholder="也可以直接打字说一句">
+      <button class="ghost" id="send">发送</button>
+    </div>
+  </div>
+
+<script>
+(function () {
+  var api = window.lovomo || {};
+  var $ = function (id) { return document.getElementById(id); };
+  var stage = $('stage'), talkBtn = $('talk'), hint = $('hint');
+  var roleSel = $('role'), modeSel = $('mode'), retSel = $('retention'), langSel = $('lang');
+  var remChk = $('remember'), bargeChk = $('barge'), sens = $('sens'), sensVal = $('sensVal');
+  var sil = $('sil'), silVal = $('silVal'), typed = $('typed');
+  var OVERLAY_ID = 'lovomo-call-overlay';
+  var STYLE_ID = 'lovomo-call-overlay-style';
+  var TARGET_RATE = 16000;
+  var BARGE_K = 2;            // 播放时的打断门限倍数：喇叭里的角色声不该把自己打断
+  var MIN_SPEECH_MS = 140;    // 至少连续这么久的能量才算"用户在说话"
+  var MIN_UTT_MS = 320;       // 太短的碎片直接丢掉
+  var MAX_UTT_MS = 20000;     // 一句话最长 20 秒，防止一直不断句
+
+  var calling = false, micMuted = false, busy = false, pttDown = false;
+  var audioCtx = null, micStream = null, srcNode = null, procNode = null, muteGain = null;
+  var nativeRate = 48000, bufSize = 2048, ringMax = 30;
+  var ring = [], utt = [], inUtt = false, speechRun = 0, silenceRun = 0, uttMs = 0, bargeRun = 0;
+  var queue = [], overlay = null, overlayHidden = false, hostReg = null;
+  var miniState = { role: '', status: '待机' };
+  var player = { list: [], idx: -1, el: null, url: null, playing: false, abort: false };
+  var lastList = [];
+  var targetSel = $('target');
+  var targetsByRole = {};
+  var targetMap = {};        // {角色key: 会话id} —— 每个角色各自记住上次打给谁
+  var targetChoice = null;   // 当前角色记过的目标；null = 没记过，跟随最近一条私聊；'' = 不绑定对话
+  var TARGET_KEY = 'lovomo-call-target';
+  var LOG_MAX = 10;          // 悬浮窗里保留最近几条通话记录
+  var PICK_PAGE = 10;        // 「选对话」每页几条，也是「打给」下拉默认列几条
+  var pickPage = 1;
+  var pickBtn = $('pickBtn'), picker = $('picker'), pickSearchEl = $('pickSearch'),
+      pickSortEl = $('pickSort'), pickDaysEl = $('pickDays'), pickListEl = $('pickList'),
+      pickInfoEl = $('pickInfo'), pickPrevBtn = $('pickPrev'), pickNextBtn = $('pickNext');
+
+  function gate() { return Math.max(0.002, Number(sens.value || 20) / 1000); }
+  function silMs() { return Number(sil.value || 800); }
+  function roleName() {
+    var o = roleSel.options[roleSel.selectedIndex];
+    return o ? o.textContent : '角色';
+  }
+  /* ---------- 「打给谁」：这一通记进哪条私聊 ---------- */
+  function targetLabel(t, compact) {
+    var n = String((t && t.display_name) || (t && t.session_id) || '');
+    if (compact) {
+      n = n.replace(/^.*?和/, '').replace(/的聊天$/, '');
+      if (n.length > 12) { n = n.slice(0, 11) + '…'; }
+    }
+    return n || '对话';
+  }
+  function listForRole() { return targetsByRole[roleSel.value] || []; }
+  function targetTime(t) { return Number((t && t.modified_time) || 0); }
+  function sortedTargets() {
+    var list = listForRole().slice();
+    list.sort(function (a, b) { return targetTime(b) - targetTime(a); });
+    return list;
+  }
+  function hasOption(sel, v) {
+    for (var i = 0; i < sel.options.length; i++) { if (sel.options[i].value === v) { return true; } }
+    return false;
+  }
+  function fillTargetSelect(sel, compact) {
+    if (!sel) { return; }
+    var list = sortedTargets();
+    var shown = list.slice(0, PICK_PAGE);
+    var keep = (targetChoice === null ? '' : String(targetChoice));
+    var i, o, found = false;
+    /* 默认只列最近 10 条；当前选中的那条即使排在 10 名开外也要带上，不然会看不出在打给谁 */
+    if (keep) {
+      for (i = 0; i < shown.length; i++) { if (shown[i].session_id === keep) { found = true; } }
+      if (!found) {
+        for (i = 0; i < list.length; i++) {
+          if (list[i].session_id === keep) { shown.push(list[i]); found = true; break; }
+        }
+      }
+    }
+    sel.innerHTML = '';
+    for (i = 0; i < shown.length; i++) {
+      o = document.createElement('option');
+      o.value = shown[i].session_id;
+      o.textContent = targetLabel(shown[i], compact);
+      o.title = String(shown[i].display_name || '')
+        + (shown[i].last_sentence ? '｜' + shown[i].last_sentence : '');
+      sel.appendChild(o);
+    }
+    o = document.createElement('option');
+    o.value = '';
+    o.textContent = list.length ? '不绑定对话（旧行为）' : '还没有私聊历史';
+    sel.appendChild(o);
+    if (!list.length) { sel.value = ''; }
+    else if (targetChoice === null || !hasOption(sel, keep)) { sel.value = shown.length ? shown[0].session_id : ''; }
+    else { sel.value = keep; }
+  }
+  function targetSession() { return targetSel ? String(targetSel.value || '') : ''; }
+  function syncTargetEnabled() {
+    if (targetSel) { targetSel.disabled = calling || !listForRole().length; }
+    /* 通话中不让换角色：换了角色这一轮的口径、称呼与「打给」都会跟着变，和自己刚说的话对不上 */
+    if (roleSel) { roleSel.disabled = calling; }
+  }
+  function syncOverlayTarget() {
+    if (!overlay || !owns() || !overlay.target) { return; }
+    fillTargetSelect(overlay.target, true);
+    overlay.target.disabled = calling;
+  }
+  function refreshTargets() {
+    fillTargetSelect(targetSel, false);
+    syncTargetEnabled();
+    syncOverlayTarget();
+    renderPicker();
+  }
+  function selectTarget(v) {
+    targetChoice = (v === undefined || v === null) ? '' : String(v);
+    targetMap[roleSel.value] = targetChoice;
+    try { localStorage.setItem(TARGET_KEY, JSON.stringify(targetMap)); } catch (e) {}
+    refreshTargets();
+  }
+  function readTargetChoice() {
+    try {
+      var raw = localStorage.getItem(TARGET_KEY);
+      if (raw && raw.charAt(0) === '{') {
+        var m = JSON.parse(raw);
+        if (m && typeof m === 'object') { targetMap = m; }
+      }
+    } catch (e) {}
+    var v = targetMap[roleSel.value];
+    return (v === undefined || v === null) ? null : String(v);
+  }
+  /* ---------- 「选对话」：搜索 / 筛选 / 分页（和统计面板的心情日记同一套用法） ---------- */
+  function pickList() {
+    var q = String(pickSearchEl && pickSearchEl.value || '').trim().toLowerCase();
+    var days = Number((pickDaysEl && pickDaysEl.value) || 0);
+    var list = listForRole().slice();
+    if (days > 0) {
+      var cut = Date.now() / 1000 - days * 86400;
+      list = list.filter(function (t) { return targetTime(t) >= cut; });
+    }
+    if (q) {
+      list = list.filter(function (t) {
+        return (String(t.display_name || '') + ' ' + String(t.session_id || '') + ' '
+                + String(t.last_sentence || '')).toLowerCase().indexOf(q) >= 0;
+      });
+    }
+    var newest = !pickSortEl || pickSortEl.value !== 'oldest';
+    list.sort(function (a, b) { return newest ? targetTime(b) - targetTime(a) : targetTime(a) - targetTime(b); });
+    return list;
+  }
+  function renderPicker() {
+    if (!pickListEl) { return; }
+    var list = pickList();
+    var pages = Math.max(1, Math.ceil(list.length / PICK_PAGE));
+    if (pickPage > pages) { pickPage = pages; }
+    if (pickPage < 1) { pickPage = 1; }
+    var slice = list.slice((pickPage - 1) * PICK_PAGE, pickPage * PICK_PAGE);
+    var cur = targetSession();
+    var i;
+    pickListEl.innerHTML = '';
+    for (i = 0; i < slice.length; i++) {
+      (function (t) {
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'pk-item' + (t.session_id === cur ? ' on' : '');
+        var n = document.createElement('span');
+        n.className = 'pk-name'; n.textContent = targetLabel(t, false);
+        var s = document.createElement('span');
+        s.className = 'pk-sub';
+        s.textContent = String(t.last_sentence || t.session_id || '');
+        s.title = String(t.display_name || '') + (t.last_sentence ? '｜' + t.last_sentence : '');
+        b.appendChild(n); b.appendChild(s);
+        b.addEventListener('click', function () { selectTarget(t.session_id); closePicker(); });
+        pickListEl.appendChild(b);
+      })(slice[i]);
+    }
+    if (!slice.length) {
+      var e = document.createElement('div');
+      e.className = 'pk-sub';
+      e.textContent = listForRole().length ? '没有符合条件的对话。' : '这个角色还没有私聊历史。';
+      pickListEl.appendChild(e);
+    }
+    if (pickInfoEl) { pickInfoEl.textContent = '第 ' + pickPage + ' / ' + pages + ' 页 · 共 ' + list.length + ' 条'; }
+    if (pickPrevBtn) { pickPrevBtn.disabled = pickPage <= 1; }
+    if (pickNextBtn) { pickNextBtn.disabled = pickPage >= pages; }
+  }
+  function placePicker() {
+    /* 面板可以很窄（手机浏览器），所以按视口夹住：先定宽，再把左边界夹进 [6, 视口宽-宽-6] */
+    if (!picker || !pickBtn) { return; }
+    var room = document.documentElement.clientWidth || 9999;
+    var width = Math.min(picker.offsetWidth || 380, Math.max(220, room - 12));
+    var box = pickBtn.getBoundingClientRect();
+    var left = Math.min(Math.max(6, Math.round(box.left)), Math.max(6, room - width - 6));
+    picker.style.width = width + 'px';
+    picker.style.left = left + 'px';
+    picker.style.top = Math.round(box.bottom + 6) + 'px';
+  }
+  function openPicker(v) {
+    if (!picker) { return; }
+    var on = (v === undefined) ? !picker.classList.contains('open') : !!v;
+    picker.classList.toggle('open', on);
+    if (on) { pickPage = 1; renderPicker(); placePicker(); if (pickSearchEl) { pickSearchEl.focus(); } }
+
+  }
+  function closePicker() { if (picker) { picker.classList.remove('open'); } }
+  /* ---------- 悬浮窗里的最近几条通话记录 ---------- */
+  function logPush(role, text) {
+    if (!owns() || !overlay || !overlay.log) { return; }
+    var t = String(text || '').trim();
+    if (!t) { return; }
+    var item = document.createElement('div');
+    item.className = 'lc-log-item lc-log-' + (role === 'role' ? 'role' : 'me');
+    var w = document.createElement('span');
+    w.className = 'lc-log-who';
+    w.textContent = (role === 'role' ? roleName() : '我') + '：';
+    var x = document.createElement('span');
+    x.className = 'lc-log-text'; x.textContent = t;
+    item.appendChild(w); item.appendChild(x);
+    overlay.log.appendChild(item);
+    while (overlay.log.children.length > LOG_MAX) {
+      overlay.log.removeChild(overlay.log.firstChild);
+    }
+    overlay.log.scrollTop = overlay.log.scrollHeight;
+  }
+  function logDivider(text) {
+    /* 挂断 / 重新开始都留个记号，这样「保留上一通记录」时不会把两通看成连续的一场 */
+    if (!owns() || !overlay || !overlay.log) { return; }
+    var d = document.createElement('div');
+    d.className = 'lc-log-item lc-log-sys';
+    d.textContent = '————' + String(text || '') + '————';
+    overlay.log.appendChild(d);
+    while (overlay.log.children.length > LOG_MAX) { overlay.log.removeChild(overlay.log.firstChild); }
+    overlay.log.scrollTop = overlay.log.scrollHeight;
+  }
+  function clearLog() { if (overlay && overlay.log) { overlay.log.innerHTML = ''; } }
+
+  function setHint(t) { hint.textContent = t || ''; }
+  function refreshMini() {
+    if (!owns() || !overlay || !overlay.miniText) { return; }
+    var t = miniState.role || miniState.status || '待机';
+    overlay.miniText.textContent = t;
+    overlay.miniText.title = t;
+  }
+  function setStatus(t) {
+    miniState.status = t || '待机';
+    if (owns() && overlay && overlay.status) { overlay.status.textContent = miniState.status; }
+    refreshMini();
+  }
+
+  function bubble(cls, who, text) {
+    var box = document.createElement('div');
+    box.className = 'bubble ' + cls;
+    if (who) {
+      var w = document.createElement('span');
+      w.className = 'who'; w.textContent = who; box.appendChild(w);
+    }
+    var tx = document.createElement('span');
+    tx.className = 'lc-text'; tx.textContent = text;
+    box.appendChild(tx);
+    stage.appendChild(box); stage.scrollTop = stage.scrollHeight;
+    return box;
+  }
+  function sys(text) { return bubble('sys', '', text); }
+  function showError(text) { bubble('err', '', text); setStatus('出错'); }
+  function ovSub(kind, text) {
+    if (kind === 'role') {
+      miniState.role = text || '';
+      if (overlay && overlay.root) { overlay.root.classList.remove('lc-cut'); }
+    }
+    if (owns() && overlay) {
+      var el = kind === 'me' ? overlay.subMe : overlay.subRole;
+      if (el) { el.textContent = text || ''; clearCutMark(el); }
+    }
+    refreshMini();
+  }
+  function syncOverlay() {
+    if (!overlay || !owns()) { return; }
+    overlay.name.textContent = roleName();
+    overlay.talk.textContent = calling ? (modeSel.value === 'ptt' ? '按住说话' : '结束通话') : '开始通话';
+    overlay.mute.textContent = micMuted ? '取消静音' : '麦克风静音';
+    if (overlay.ret) { overlay.ret.value = retSel.value; }
+    if (overlay.lang) { overlay.lang.value = langSel.value; }
+    if (overlay.rem) { overlay.rem.checked = !!remChk.checked; }
+    syncOverlayTarget();
+  }
+
+  /* ---------- 录音引擎：持续采集 + 能量门限自动断句 + 打断 ---------- */
+  function resample(input, from) {
+    if (from === TARGET_RATE) { return input; }
+    var ratio = from / TARGET_RATE, n = Math.round(input.length / ratio), out = new Float32Array(n);
+    for (var i = 0; i < n; i++) {
+      var pos = i * ratio, i0 = Math.floor(pos);
+      var i1 = Math.min(i0 + 1, input.length - 1), f = pos - i0;
+      out[i] = input[i0] * (1 - f) + input[i1] * f;
+    }
+    return out;
+  }
+  function encodeWav(samples, rate) {
+    var buf = new ArrayBuffer(44 + samples.length * 2), view = new DataView(buf);
+    var tag = function (off, s) {
+      for (var i = 0; i < s.length; i++) { view.setUint8(off + i, s.charCodeAt(i)); }
+    };
+    tag(0, 'RIFF');
+    view.setUint32(4, 36 + samples.length * 2, true);
+    tag(8, 'WAVE'); tag(12, 'fmt ');
+    view.setUint32(16, 16, true); view.setUint16(20, 1, true); view.setUint16(22, 1, true);
+    view.setUint32(24, rate, true); view.setUint32(28, rate * 2, true);
+    view.setUint16(32, 2, true); view.setUint16(34, 16, true);
+    tag(36, 'data'); view.setUint32(40, samples.length * 2, true);
+    for (var i = 0, off = 44; i < samples.length; i++, off += 2) {
+      var v = Math.max(-1, Math.min(1, samples[i]));
+      view.setInt16(off, v < 0 ? v * 0x8000 : v * 0x7FFF, true);
+    }
+    return buf;
+  }
+  function toBase64(buf) {
+    var bytes = new Uint8Array(buf), bin = '', step = 0x8000;
+    for (var i = 0; i < bytes.length; i += step) {
+      bin += String.fromCharCode.apply(null, bytes.subarray(i, i + step));
+    }
+    return btoa(bin);
+  }
+  function fromBase64(text) {
+    var bin = atob(text), out = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) { out[i] = bin.charCodeAt(i); }
+    return out;
+  }
+  function merge(list) {
+    var total = 0, i;
+    for (i = 0; i < list.length; i++) { total += list[i].length; }
+    var all = new Float32Array(total), off = 0;
+    for (i = 0; i < list.length; i++) { all.set(list[i], off); off += list[i].length; }
+    return all;
+  }
+  function rmsOf(f32) {
+    var s = 0, n = 0;
+    for (var i = 0; i < f32.length; i += 4) { s += f32[i] * f32[i]; n++; }
+    return Math.sqrt(s / Math.max(1, n));
+  }
+
+  function onBlock(f32) {
+    var blockMs = (f32.length / nativeRate) * 1000;
+    if (micMuted) { return; }
+    var rms = rmsOf(f32);
+    // 打断：播放角色语音时听到足够响的人声就立刻停掉播放，接着把这句话收进来
+    if (player.playing && bargeChk.checked) {
+      if (rms >= gate() * BARGE_K) {
+        bargeRun += blockMs;
+        if (bargeRun >= 160) {
+          bargeRun = 0;
+          stopPlayback(true);
+          setHint('听到你说话了，已打断角色语音。');
+          setStatus('在听你说…');
+        }
+      } else { bargeRun = 0; }
+    } else { bargeRun = 0; }
+
+    if (modeSel.value === 'ptt') {
+      if (pttDown) { utt.push(f32); uttMs += blockMs; }
+      return;
+    }
+    ring.push(f32);
+    if (ring.length > ringMax) { ring.shift(); }
+    var loud = rms >= gate();
+    if (!inUtt) {
+      if (loud) {
+        speechRun += blockMs;
+        if (speechRun >= MIN_SPEECH_MS) {
+          utt = ring.slice();
+          uttMs = 0;
+          for (var i = 0; i < utt.length; i++) { uttMs += (utt[i].length / nativeRate) * 1000; }
+          inUtt = true; silenceRun = 0;
+          setStatus('在听你说…');
+        }
+      } else { speechRun = 0; }
+      return;
+    }
+    utt.push(f32); uttMs += blockMs;
+    if (loud) { silenceRun = 0; } else { silenceRun += blockMs; }
+    if (silenceRun >= silMs() || uttMs >= MAX_UTT_MS) { finishUtt(); }
+  }
+
+  function finishUtt() {
+    var list = utt, ms = uttMs;
+    utt = []; inUtt = false; speechRun = 0; silenceRun = 0; uttMs = 0;
+    if (ms < MIN_UTT_MS || !list.length) { setStatus('待机'); return; }
+    var pcm = resample(merge(list), nativeRate);
+    enqueue({ character_key: roleSel.value, audio: toBase64(encodeWav(pcm, TARGET_RATE)),
+              text: '', lang: langSel.value, retention: retSel.value, remember: remChk.checked,
+              target_session: targetSession(), multi: true, max_sentences: 3 });
+  }
+
+  function startCall() {
+    /* 谁在打电话，悬浮窗就归谁管：老实例还在页面上也不耽误这一次通话 */
+    if (hostDoc()) { buildOverlay(); }
+    if (overlay && overlay.log && overlay.log.children.length) { logDivider('开始新通话'); }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia
+        || !(window.AudioContext || window.webkitAudioContext)) {
+      showError('这个浏览器不支持录音；换 Chrome / Edge 再试（手机端需要 https）。');
+      return;
+    }
+    navigator.mediaDevices.getUserMedia({ audio: { channelCount: 1, echoCancellation: true,
+                                                   noiseSuppression: true, autoGainControl: true } })
+      .then(function (stream) {
+        micStream = stream;
+        audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        nativeRate = audioCtx.sampleRate || 48000;
+        ringMax = Math.max(4, Math.ceil((nativeRate * 1.2) / bufSize));
+        return audioCtx.state === 'suspended' ? audioCtx.resume() : null;
+      })
+      .then(function () {
+        srcNode = audioCtx.createMediaStreamSource(micStream);
+        procNode = audioCtx.createScriptProcessor(bufSize, 1, 1);
+        muteGain = audioCtx.createGain(); muteGain.gain.value = 0;
+        procNode.onaudioprocess = function (ev) {
+          try { onBlock(new Float32Array(ev.inputBuffer.getChannelData(0))); } catch (e) {}
+        };
+        srcNode.connect(procNode); procNode.connect(muteGain); muteGain.connect(audioCtx.destination);
+        calling = true; micMuted = false; ring = []; utt = []; inUtt = false;
+        talkBtn.classList.add('on');
+        syncOverlay(); syncTalkBtn();
+        setStatus('待机');
+        setHint(modeSel.value === 'ptt' ? '按住大按钮说话，松开就发出去。'
+                                        : '正在听……直接说话，停顿一下我自动接话。');
+        var tg = '';
+        for (var ti = 0; ti < listForRole().length; ti++) {
+          if (listForRole()[ti].session_id === targetSession()) { tg = targetLabel(listForRole()[ti], false); }
+        }
+        sys('通话已接通：' + (modeSel.value === 'ptt' ? '按住说话' : '全双工自动断句')
+            + '。灵敏度 ' + sens.value + '，停顿 ' + sil.value + 'ms。'
+            + (tg ? '这一通记进「' + tg + '」。' : '这一通不写进任何聊天记录。'));
+      })
+      .catch(function (e) {
+        showError('拿不到麦克风：' + e.message + '（手机 / 局域网访问必须是 https）');
+      });
+  }
+
+  function stopCall(quiet) {
+    calling = false; inUtt = false; pttDown = false; utt = []; ring = [];
+    try { if (procNode) { procNode.disconnect(); procNode.onaudioprocess = null; } } catch (e) {}
+    try { if (srcNode) { srcNode.disconnect(); } } catch (e) {}
+    try { if (muteGain) { muteGain.disconnect(); } } catch (e) {}
+    try { if (micStream) { micStream.getTracks().forEach(function (t) { t.stop(); }); } } catch (e) {}
+    try { if (audioCtx) { audioCtx.close(); } } catch (e) {}
+    procNode = null; srcNode = null; muteGain = null; micStream = null; audioCtx = null;
+    talkBtn.classList.remove('on');
+    syncOverlay(); syncTalkBtn();
+    if (!quiet) { setHint('这一通已结束。'); }
+    setStatus('已挂断');
+  }
+
+  /* ---------- 逐句播放，句间可被打断 ---------- */
+  /* 打断留痕：正在说的那句没播完就被截断了，屏幕上把它划掉并标「已打断」，
+     这样历史里多出来的那句台词用户看得懂。只有真的截断播放时才标。 */
+  var CUT_TITLE = '这句没说完就被你打断了';
+  var CUT_TEXT = '已打断';
+  var lastRoleBox = null;
+
+  function clearCutMark(el) {
+    if (!el) { return; }
+    el.classList.remove('lc-cut');
+    if (el.getAttribute('title') === CUT_TITLE) { el.removeAttribute('title'); }
+    var tags = el.querySelectorAll('.lc-cut-tag');
+    for (var i = 0; i < tags.length; i++) {
+      if (tags[i].parentNode) { tags[i].parentNode.removeChild(tags[i]); }
+    }
+  }
+  function addCutTag(el) {
+    var tag = el.ownerDocument.createElement('span');
+    tag.className = 'lc-cut-tag'; tag.textContent = CUT_TEXT; tag.title = CUT_TITLE;
+    var media = el.querySelector('audio');
+    if (media) { el.insertBefore(tag, media); } else { el.appendChild(tag); }
+  }
+  function markCut() {
+    if (owns() && overlay && overlay.subRole) {  // 悬浮窗里的角色那一条
+      clearCutMark(overlay.subRole);
+      overlay.subRole.classList.add('lc-cut');
+      overlay.subRole.title = CUT_TITLE;
+      addCutTag(overlay.subRole);
+      if (overlay.root) { overlay.root.classList.add('lc-cut'); }
+    }
+    if (lastRoleBox) {                          // 面板里对应的那条台词
+      clearCutMark(lastRoleBox);
+      lastRoleBox.classList.add('lc-cut');
+      lastRoleBox.title = CUT_TITLE;
+      addCutTag(lastRoleBox);
+    }
+  }
+  function stopPlayback(cut) {
+    // 打断那一刻 player 还停在没播完的那句上，先判定再清状态
+    var cutOne = !!(cut && player.playing && player.idx >= 0 && player.idx < player.list.length);
+    player.abort = true; player.list = []; player.idx = -1; player.playing = false;
+    if (player.el) { try { player.el.pause(); } catch (e) {} player.el = null; }
+    if (player.url) { try { URL.revokeObjectURL(player.url); } catch (e) {} player.url = null; }
+    if (cutOne) { markCut(); }
+    setStatus(calling ? '待机' : '已挂断');
+  }
+  function playList(list) {
+    stopPlayback();
+    lastList = (list || []).filter(function (x) { return x && x.data; });
+    $('replay').hidden = lastList.length === 0;
+    if (!lastList.length) { return; }
+    player.list = lastList; player.idx = -1; player.abort = false;
+    nextPiece();
+  }
+  function nextPiece() {
+    if (player.abort) { return; }
+    player.idx++;
+    if (player.idx >= player.list.length) {
+      player.playing = false; player.el = null;
+      if (player.url) { try { URL.revokeObjectURL(player.url); } catch (e) {} player.url = null; }
+      setStatus(calling ? '待机' : '已挂断');
+      return;
+    }
+    var item = player.list[player.idx];
+    var url;
+    try { url = URL.createObjectURL(new Blob([fromBase64(item.data)], { type: 'audio/wav' })); }
+    catch (e) { nextPiece(); return; }
+    player.url = url;
+    var el = new Audio(url);
+    player.el = el; player.playing = true;
+    setStatus('角色说话中（第 ' + (player.idx + 1) + '/' + player.list.length + ' 句）');
+    el.onended = function () { nextPiece(); };
+    el.onerror = function () { nextPiece(); };
+    var p = el.play();
+    if (p && p.catch) { p.catch(function () { setHint('浏览器拦了自动播放，点「重播」即可听到。'); }); }
+  }
+
+  /* ---------- 一轮通话 ---------- */
+  function enqueue(payload) { queue.push(payload); pump(); }
+  function pump() {
+    if (busy || !queue.length) { return; }
+    busy = true;
+    var p = queue.shift();
+    setStatus(p.text ? '发送中…' : '识别中…');
+    fetch('/api/call/turn', {
+      method: 'POST',
+      credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p)
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        busy = false;
+        if (!d || !d.ok) {
+          showError((d && d.error) || '请求失败');
+          setHint('这一句没成功，再说一次试试。');
+          pump(); return;
+        }
+        bubble('me', '我', d.text || '');
+        ovSub('me', d.text || '');
+        logPush('me', d.text || '');
+        var box = bubble('role', roleName(), d.reply || '（没有回复文字）');
+        lastRoleBox = box;
+        ovSub('role', d.reply || '');
+        logPush('role', d.reply || '');
+        if (d.audio) {
+          try {
+            var url = URL.createObjectURL(new Blob([fromBase64(d.audio)],
+                                                   { type: d.audio_mime || 'audio/wav' }));
+            var el = document.createElement('audio');
+            el.controls = true; el.src = url; box.appendChild(el);
+          } catch (e) { showError('语音播放失败：' + e.message); }
+        }
+        var list = (d.audios && d.audios.length) ? d.audios
+                   : (d.audio ? [{ text: d.reply, emotion: '', data: d.audio }] : []);
+        playList(list);
+        pump();
+      })
+      .catch(function (e) {
+        busy = false;
+        showError('请求失败：' + e.message);
+        pump();
+      });
+  }
+
+  function syncTalkBtn() {
+    talkBtn.textContent = calling
+      ? (modeSel.value === 'ptt' ? '按住说话' : '结束通话')
+      : '开始通话';
+    talkBtn.classList.toggle('on', calling && modeSel.value !== 'ptt');
+    syncTargetEnabled();
+  }
+  function toggleCall() { if (calling) { stopCall(false); } else { startCall(); } }
+
+  /* ---------- 宿主页里的可拖动悬浮窗（同宿主只留一个实例） ---------- */
+  var POS_KEY = 'lovomo-call-overlay-pos';
+  var self = { id: 'lc' + Math.random().toString(36).slice(2), alive: true,
+               onPromoted: null, onDemoted: null };
+  function hostDoc() {
+    try {
+      if (window.parent && window.parent !== window && window.parent.document) {
+        return window.parent.document;
+      }
+    } catch (e) {}
+    return null;
+  }
+  /* 同一个宿主页里可能有多个插件页面（侧边栏来回开、宿主自己重挂 iframe）。
+   * 悬浮窗节点唯一、只绑一次事件，最新的页面接管"谁说话"，节点不重建，
+   * 于是拖动位置不会被别的实例冲回原处，关掉插件页也能把窗收干净。 */
+  function regOf(doc) {
+    if (!doc) { return null; }
+    var reg = doc.__lovomoCallOverlay;
+    if (!reg) {
+      reg = doc.__lovomoCallOverlay = { node: null, ctrl: null, instances: [], pos: null };
+    }
+    if (reg.instances.indexOf(self) < 0) { reg.instances.push(self); }
+    return reg;
+  }
+  function owns() { return !!(hostReg && hostReg.ctrl === self && self.alive); }
+  function readPos() {
+    try {
+      var v = JSON.parse(window.localStorage.getItem(POS_KEY) || 'null');
+      if (v && isFinite(v.left) && isFinite(v.top)) { return v; }
+    } catch (e) {}
+    return null;
+  }
+  function savePos(pos) {
+    try { window.localStorage.setItem(POS_KEY, JSON.stringify(pos)); } catch (e) {}
+  }
+  function defaultPos(doc) {
+    var sb = doc.querySelector('.sidebar') || doc.querySelector('#sidebar');
+    var left = 260;
+    try { if (sb) { left = Math.round(sb.getBoundingClientRect().right) + 18; } } catch (e) {}
+    return { left: Math.max(20, left), top: 88 };
+  }
+  function clampPos(doc, pos) {
+    var w = doc.documentElement.clientWidth || 1280;
+    var h = doc.documentElement.clientHeight || 800;
+    return { left: Math.min(Math.max(4, pos.left), Math.max(4, w - 120)),
+             top: Math.min(Math.max(4, pos.top), Math.max(4, h - 48)) };
+  }
+  function placeOverlay(doc, root, pos) {
+    var p = clampPos(doc, pos || hostReg.pos || readPos() || defaultPos(doc));
+    root.style.left = p.left + 'px';
+    root.style.top = p.top + 'px';
+    hostReg.pos = p;
+  }
+  function injectStyle(doc) {
+    if (doc.getElementById(STYLE_ID)) { return; }
+    var st = doc.createElement('style');
+    st.id = STYLE_ID;
+    st.textContent = [
+      '#lovomo-call-overlay{position:fixed;z-index:2147483000;left:260px;top:90px;width:300px;height:300px;',
+      'min-width:190px;min-height:56px;resize:both;overflow:hidden;display:flex;flex-direction:column;',
+      'gap:6px;padding:10px;border-radius:var(--radius-card,14px);border:1px solid var(--line,rgba(0,0,0,.12));',
+      'background:var(--surface,#fff);color:var(--ink,#1f2328);',
+      'font:13px/1.5 "Microsoft YaHei",system-ui,-apple-system,sans-serif;box-shadow:0 10px 28px rgba(0,0,0,.22);}',
+      '#lovomo-call-overlay .lc-body{display:flex;flex-direction:column;gap:6px;flex:1 1 auto;min-height:0;}',
+      '#lovomo-call-overlay .lc-head{display:flex;align-items:center;gap:6px;cursor:move;user-select:none;}',
+      '#lovomo-call-overlay .lc-avatar{font-size:15px;}',
+      '#lovomo-call-overlay .lc-name{font-weight:600;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}',
+      '#lovomo-call-overlay .lc-status{font-size:11px;color:var(--muted,#6b7280);white-space:nowrap;}',
+      '#lovomo-call-overlay .lc-subs{flex:1 1 auto;overflow:auto;display:flex;flex-direction:column;gap:4px;}',
+      '#lovomo-call-overlay .lc-sub{padding:4px 8px;border-radius:10px;word-break:break-word;}',
+      '#lovomo-call-overlay .lc-sub.lc-role{background:rgba(47,124,246,.10);}',
+      '#lovomo-call-overlay .lc-sub.lc-me{background:rgba(0,0,0,.06);}',
+      '#lovomo-call-overlay .lc-sub.lc-cut{text-decoration:line-through;',
+      'text-decoration-color:var(--danger,#d9534f);}',
+      '#lovomo-call-overlay .lc-sub .lc-cut-tag{display:inline-block;text-decoration:none;',
+      'margin-left:6px;padding:0 5px;border-radius:8px;font-size:10px;line-height:15px;',
+      'white-space:nowrap;color:var(--danger,#d9534f);border:1px solid var(--danger,#d9534f);',
+      'background:var(--surface,#fff);}',
+      '#lovomo-call-overlay .lc-log{flex:0 0 auto;max-height:110px;overflow-y:auto;display:flex;',
+      'flex-direction:column;gap:2px;padding:4px 6px;border-radius:10px;background:rgba(0,0,0,.04);',
+      'font-size:12px;color:var(--muted,#6b7280);}',
+      '#lovomo-call-overlay .lc-log:empty{display:none;}',
+      '#lovomo-call-overlay .lc-log-item{display:flex;gap:5px;line-height:1.45;}',
+      '#lovomo-call-overlay .lc-log-who{flex:0 0 auto;opacity:.75;}',
+      '#lovomo-call-overlay .lc-log-text{flex:1 1 auto;min-width:0;word-break:break-word;}',
+      '#lovomo-call-overlay .lc-log-item.lc-log-role .lc-log-text{color:var(--ink,#1f2328);}',
+      /* 挂断 / 重新开始的记号：一行居中灰字，不属于「我」或角色任何一方 */
+      '#lovomo-call-overlay .lc-log-item.lc-log-sys{display:block;text-align:center;',
+      'font-size:11px;opacity:.85;}',
+      '#lovomo-call-overlay .lc-row{display:flex;gap:6px;flex-wrap:wrap;}',
+      '#lovomo-call-overlay button{font:inherit;padding:3px 10px;border-radius:8px;cursor:pointer;',
+      'border:1px solid var(--line,rgba(0,0,0,.12));background:var(--surface,#fff);color:inherit;}',
+      '#lovomo-call-overlay .lc-bubble{display:none;}',
+      '#lovomo-call-overlay .lc-set{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:12px;}',
+      '#lovomo-call-overlay .lc-set select{font:inherit;padding:2px 6px;border-radius:6px;',
+      'border:1px solid var(--line,rgba(0,0,0,.12));background:var(--surface,#fff);color:inherit;}',
+      '#lovomo-call-overlay .lc-rem{display:flex;align-items:center;gap:3px;white-space:nowrap;}',
+      '#lovomo-call-overlay.lc-mini{width:auto!important;min-width:0;max-width:260px;height:auto!important;',
+      'min-height:44px;padding:5px;border-radius:24px;resize:none;}',
+      '#lovomo-call-overlay.lc-mini .lc-body{display:none;}',
+      '#lovomo-call-overlay.lc-mini .lc-bubble{display:flex;align-items:center;gap:7px;width:100%;',
+      'cursor:pointer;}',
+      '#lovomo-call-overlay .lc-mini-ico{display:flex;align-items:center;justify-content:center;',
+      'width:34px;height:34px;flex:0 0 34px;border-radius:50%;color:#fff;font-size:17px;',
+      'background:var(--brand,var(--skin-accent,#2f7cf6));}',
+      '#lovomo-call-overlay .lc-mini-text{flex:1 1 auto;min-width:0;max-width:190px;overflow:hidden;',
+      'text-overflow:ellipsis;white-space:nowrap;font-size:12px;color:var(--muted,#6b7280);}',
+      '#lovomo-call-overlay.lc-mini.lc-cut .lc-mini-text{text-decoration:line-through;',
+      'text-decoration-color:var(--danger,#d9534f);}'
+    ].join('');
+    doc.head.appendChild(st);
+  }
+  var OVERLAY_HTML = '<div class="lc-body">'
+    + '<div class="lc-head"><span class="lc-avatar">☎</span><span class="lc-name">角色</span>'
+    + '<span class="lc-status">待机</span><button class="lc-min" title="最小化">–</button></div>'
+    + '<div class="lc-subs"><div class="lc-sub lc-me"></div><div class="lc-sub lc-role"></div></div>'
+    + '<div class="lc-log" title="最近几条通话记录，可滚动"></div>'
+    + '<div class="lc-set"><select class="lc-target" title="这一通记进谁的聊天"></select>'
+    + '<select class="lc-retention" title="留痕">'
+    + '<option value="none">不留痕</option><option value="text">只留文字</option>'
+    + '<option value="full">文字+录音</option></select>'
+    + '<select class="lc-lang" title="识别语种">'
+    + '<option value="auto">自动</option><option value="zh">中文</option>'
+    + '<option value="ja">日语</option><option value="en">英语</option></select>'
+    + '<label class="lc-rem"><input type="checkbox" class="lc-remember">记住</label></div>'
+    + '<div class="lc-row"><button class="lc-talk">开始通话</button>'
+    + '<button class="lc-mute">麦克风静音</button>'
+    + '<button class="lc-hang">挂断</button>'
+    + '<button class="lc-panel" title="收进插件面板">面板</button></div></div>'
+    + '<div class="lc-bubble" title="展开悬浮窗"><span class="lc-mini-ico">☎</span>'
+    + '<span class="lc-mini-text">待机</span></div>';
+  function cacheOverlay(doc, root) {
+    var q = function (sel) { return root.querySelector(sel); };
+    return { root: root, doc: doc, name: q('.lc-name'), status: q('.lc-status'),
+             subMe: q('.lc-sub.lc-me'), subRole: q('.lc-sub.lc-role'),
+             talk: q('.lc-talk'), mute: q('.lc-mute'), hang: q('.lc-hang'),
+             min: q('.lc-min'), panel: q('.lc-panel'), bubble: q('.lc-bubble'),
+             miniText: q('.lc-mini-text'), log: q('.lc-log'), target: q('.lc-target'),
+             ret: q('.lc-retention'), lang: q('.lc-lang'), rem: q('.lc-remember') };
+  }
+  function bindOverlay(doc, reg, root) {
+    if (root.__lovomoBound) { return; }
+    root.__lovomoBound = true;
+    var ctrl = function () { return reg.ctrl; };
+    var hit = function (t, sel) { return t && t.closest ? t.closest(sel) : null; };
+    var inControl = function (t) {
+      while (t && t !== root) {
+        var tag = (t.tagName || '').toLowerCase();
+        if (tag === 'button' || tag === 'select' || tag === 'input'
+            || tag === 'option' || tag === 'label') { return true; }
+        t = t.parentNode;
+      }
+      return false;
+    };
+    /* 拖动绑在整块上：最小化成小圆条之后也能拖，拖了就不算点击 */
+    var drag = null, moved = false;
+    root.addEventListener('pointerdown', function (ev) {
+      if (ev.button !== 0 || inControl(ev.target)) { return; }
+      var r = root.getBoundingClientRect();
+      drag = { x: ev.clientX, y: ev.clientY, left: r.left, top: r.top, target: ev.target };
+      moved = false;
+      try { root.setPointerCapture(ev.pointerId); } catch (e) {}
+      ev.preventDefault();
+    });
+    root.addEventListener('pointermove', function (ev) {
+      if (!drag) { return; }
+      var dx = ev.clientX - drag.x, dy = ev.clientY - drag.y;
+      if (Math.abs(dx) + Math.abs(dy) > 4) { moved = true; }
+      var p = clampPos(doc, { left: drag.left + dx, top: drag.top + dy });
+      root.style.left = p.left + 'px';
+      root.style.top = p.top + 'px';
+      reg.pos = p;
+    });
+    var endDrag = function (ev) {
+      if (!drag) { return; }
+      /* setPointerCapture 之后 pointerup 的 target 会变成 root，所以点击判定要用
+         pointerdown 时记下的那个元素，否则小条永远点不开 */
+      var downTarget = drag.target;
+      drag = null;
+      if (reg.pos) { savePos(reg.pos); }
+      var c = ctrl();
+      if (!moved) {
+        if (hit(downTarget, '.lc-bubble') || hit(ev.target, '.lc-bubble')) {
+          root.classList.remove('lc-mini');
+          if (c && c.syncOverlay) { c.syncOverlay(); }
+        }
+      }
+    };
+    root.addEventListener('pointerup', endDrag);
+    root.addEventListener('pointercancel', endDrag);
+    root.addEventListener('click', function (ev) {
+      var c = ctrl();
+      if (!c) { return; }
+      if (hit(ev.target, '.lc-min')) { root.classList.add('lc-mini'); if (c.syncOverlay) { c.syncOverlay(); } return; }
+      if (hit(ev.target, '.lc-bubble')) { root.classList.remove('lc-mini'); if (c.syncOverlay) { c.syncOverlay(); } return; }
+      if (hit(ev.target, '.lc-talk')) { c.toggleCall(); return; }
+      if (hit(ev.target, '.lc-mute')) { c.toggleMute(); return; }
+      if (hit(ev.target, '.lc-hang')) { c.hangup(); return; }
+      if (hit(ev.target, '.lc-panel')) { c.hideOverlay(); return; }
+    });
+    root.addEventListener('change', function (ev) {
+      var c = ctrl();
+      if (!c || !c.applyOverlaySetting) { return; }
+      var t = ev.target;
+      if (t.classList.contains('lc-retention')) { c.applyOverlaySetting('retention', t.value); }
+      else if (t.classList.contains('lc-target')) { c.applyOverlaySetting('target_session', t.value); }
+      else if (t.classList.contains('lc-lang')) { c.applyOverlaySetting('lang', t.value); }
+      else if (t.classList.contains('lc-remember')) { c.applyOverlaySetting('remember', !!t.checked); }
+    });
+  }
+  function buildOverlay() {
+    var doc = hostDoc();
+    if (!doc || !self.alive) { return null; }
+    hostReg = regOf(doc);
+    injectStyle(doc);
+    var stale = doc.getElementById(OVERLAY_ID);
+    if (stale && stale !== hostReg.node) {
+      try { stale.parentNode.removeChild(stale); } catch (e) {}
+    }
+    var root = hostReg.node && hostReg.node.isConnected ? hostReg.node : null;
+    if (!root) {
+      root = doc.createElement('div');
+      root.id = OVERLAY_ID;
+      root.innerHTML = OVERLAY_HTML;
+      doc.body.appendChild(root);
+      hostReg.node = root;
+      placeOverlay(doc, root, null);
+      bindOverlay(doc, hostReg, root);
+    }
+    var prev = hostReg.ctrl;
+    /* 老实例还在通话中：节点和按钮继续归它，免得新开的页面把正在通话的窗冲成「待机」 */
+    if (prev && prev !== self && prev.alive && prev.isCalling && prev.isCalling()) {
+      overlay = cacheOverlay(doc, root);
+      overlayHidden = false;
+      return overlay;
+    }
+    if (prev && prev !== self && prev.onDemoted) { try { prev.onDemoted(); } catch (e) {} }
+    hostReg.ctrl = self;
+    overlay = cacheOverlay(doc, root);
+    overlayHidden = false;
+    syncOverlay();
+    return overlay;
+  }
+  function hideOverlay() {
+    if (overlay && owns()) { overlay.root.style.display = 'none'; }
+    overlayHidden = true;
+    setHint('悬浮窗已收起，点「弹出悬浮窗」可以再展开。');
+  }
+  function showOverlay() {
+    if (!overlay || !overlay.root.isConnected || !owns()) { buildOverlay(); }
+    if (overlay) {
+      overlay.root.style.display = '';
+      overlay.root.classList.remove('lc-mini');
+      overlayHidden = false;
+      if (owns()) { syncOverlay(); }
+    }
+  }
+  function dropOverlay() {
+    var doc = hostDoc();
+    var reg = doc && doc.__lovomoCallOverlay;
+    if (reg && reg.node) {
+      try { reg.node.parentNode.removeChild(reg.node); } catch (e) {}
+      reg.node = null;
+    }
+    if (reg && reg.ctrl === self) { reg.ctrl = null; }
+    overlay = null;
+    overlayHidden = true;
+  }
+  /* 插件页被关掉（侧边栏换页、宿主清空 iframe）时把自己那一份收干净：
+   * 没有别的实例了就连悬浮窗一起摘掉，还有别的实例就让它接手。 */
+  function teardown() {
+    if (!self.alive) { return; }
+    self.alive = false;
+    try { stopPlayback(); } catch (e) {}
+    if (calling) { try { stopCall(true); } catch (e) {} }
+    var doc = hostDoc();
+    var reg = doc && doc.__lovomoCallOverlay;
+    if (!reg) { overlay = null; return; }
+    var i = reg.instances.indexOf(self);
+    if (i >= 0) { reg.instances.splice(i, 1); }
+    if (reg.ctrl !== self) { overlay = null; return; }
+    var next = null;
+    for (var k = reg.instances.length - 1; k >= 0; k--) {
+      if (reg.instances[k].alive) { next = reg.instances[k]; break; }
+    }
+    if (next) {
+      reg.ctrl = next;
+      if (next.onPromoted) { try { next.onPromoted(); } catch (e) {} }
+    } else {
+      reg.ctrl = null;
+      if (reg.node) { try { reg.node.parentNode.removeChild(reg.node); } catch (e) {} }
+      reg.node = null;
+      var st = doc.getElementById(STYLE_ID);
+      if (st) { try { st.parentNode.removeChild(st); } catch (e) {} }
+    }
+    overlay = null;
+    overlayHidden = true;
+  }
+  /* 宿主页里的事件统一转给"当前接管者"，这样老页面退了也不会留下哑掉的按钮 */
+  self.onPromoted = function () {
+    var doc = hostDoc();
+    var reg = doc && doc.__lovomoCallOverlay;
+    if (!reg || !reg.node) { return; }
+    overlay = cacheOverlay(doc, reg.node);
+    overlay.root.style.display = '';
+    overlayHidden = false;
+    syncOverlay();
+  };
+  self.onDemoted = function () {};
+  self.isCalling = function () { return !!calling; };
+  self.syncOverlay = function () { syncOverlay(); };
+  self.toggleCall = function () { toggleCall(); };
+  self.toggleMute = function () {
+    micMuted = !micMuted;
+    var b = $('mute');
+    if (b) { b.textContent = micMuted ? '取消静音' : '麦克风静音'; }
+    syncOverlay();
+    setStatus(micMuted ? '麦克风已静音' : '待机');
+  };
+  self.hangup = function () { hangup(); };
+  self.hideOverlay = function () { hideOverlay(); };
+  self.applyOverlaySetting = function (kind, value) {
+    if (kind === 'retention') { retSel.value = value; }
+    else if (kind === 'target_session') { selectTarget(value); }
+    else if (kind === 'lang') { langSel.value = value; }
+    else if (kind === 'remember') { remChk.checked = !!value; }
+    schedulePersistSettings();
+    syncOverlay();
+  };
+
+  /* ---------- 挂断 / 重播 / 打字 ---------- */
+  function hangup() {
+    stopPlayback();
+    stopCall(true);
+    queue = [];
+    stage.innerHTML = '';
+    logDivider('已挂断');
+    closePicker();
+    $('replay').hidden = true; lastList = [];
+    ovSub('me', ''); ovSub('role', '');
+    setHint('这一通已挂断，屏幕清空了；悬浮窗里留着这一通的记录，记忆按留痕档位留下。');
+    setStatus('已挂断');
+  }
+
+  function loadStatus() {
+    return fetch('/api/call/status', { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || !d.ok) { showError('读取通话状态失败：' + ((d && d.error) || '未知错误')); return; }
+        roleSel.innerHTML = '';
+        (d.characters || []).forEach(function (c) {
+          var o = document.createElement('option');
+          o.value = c.key; o.textContent = c.name || c.key;
+          roleSel.appendChild(o);
+        });
+        if (!roleSel.options.length) { showError('还没有配置角色，先去设置里加一个角色。'); }
+        targetsByRole = d.targets || {};
+        targetChoice = readTargetChoice();
+        refreshTargets();
+        if (d.default_retention) { retSel.value = d.default_retention; }
+        remChk.checked = !!d.remember_default;
+        // 配置页里已保存的值稍后由 loadPluginSettings() 覆盖（权威来源）
+        sensVal.textContent = sens.value;
+        silVal.textContent = sil.value;
+        syncTalkBtn(); syncOverlay();
+        sys('识别引擎 ' + (d.asr_engine || 'local') + '，合成引擎 ' + (d.tts_backend || 'local')
+            + '。默认识别走本机、只留文字，原始录音用完即删。');
+      })
+      .catch(function (e) { showError('读取通话状态失败：' + e.message); });
+  }
+
+  /* ---------- 通话设置：写回插件设置接口（配置页同源） ---------- */
+  var PLUGIN_ID = 'lovomo_call';
+  var callSettings = {};
+  var settingsTimer = null;
+
+  function readUiSettings() {
+    return {
+      retention: retSel.value, lang: langSel.value, remember: !!remChk.checked,
+      mode: modeSel.value, sensitivity: Number(sens.value), silence_ms: Number(sil.value),
+      barge: !!bargeChk.checked
+    };
+  }
+
+  function applyCallSettingsUi(s) {
+    if (!s) { return; }
+    if (s.retention === 'none' || s.retention === 'text' || s.retention === 'full') { retSel.value = s.retention; }
+    if (s.lang) { langSel.value = s.lang; }
+    if (typeof s.remember === 'boolean') { remChk.checked = s.remember; }
+    if (s.mode === 'duplex' || s.mode === 'ptt') { modeSel.value = s.mode; }
+    if (s.sensitivity) { sens.value = String(s.sensitivity); }
+    if (s.silence_ms) { sil.value = String(s.silence_ms); }
+    if (typeof s.barge === 'boolean') { bargeChk.checked = s.barge; }
+    sensVal.textContent = sens.value;
+    silVal.textContent = sil.value;
+    syncTalkBtn(); syncOverlay();
+  }
+
+  // 打开通话界面时先按配置页当前值初始化（权威来源），桥接快照只作退化
+  function loadPluginSettings() {
+    return fetch('/api/plugins/settings?id=' + encodeURIComponent(PLUGIN_ID), { credentials: 'same-origin' })
+      .then(function (r) { return r.json(); })
+      .then(function (d) { callSettings = (d && d.settings) || api.settings || {}; applyCallSettingsUi(callSettings); })
+      .catch(function () { callSettings = api.settings || {}; applyCallSettingsUi(callSettings); });
+  }
+
+  function persistCallSettings(quiet) {
+    var merged = {}, k, ui = readUiSettings();
+    for (k in callSettings) { if (Object.prototype.hasOwnProperty.call(callSettings, k)) { merged[k] = callSettings[k]; } }
+    for (k in ui) { if (Object.prototype.hasOwnProperty.call(ui, k)) { merged[k] = ui[k]; } }
+    callSettings = merged;
+    var opts = {
+      method: 'POST', credentials: 'same-origin',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id: PLUGIN_ID, settings: merged })
+    };
+    return fetch('/api/plugins/settings', opts)
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (!d || d.success === false) { throw new Error((d && d.error) || '保存失败'); }
+        // 配置页读的是「生效快照」，必须 reload 提交草稿才会同步
+        return fetch('/api/plugins/reload', opts).then(function (r2) { return r2.json(); });
+      })
+      .then(function () { if (!quiet) { setHint('设置已写回插件设置，配置页同步。'); } })
+      .catch(function (e) { if (!quiet) { setHint('设置写回失败：' + (e && e.message ? e.message : e)); } });
+  }
+
+  function schedulePersistSettings() {
+    if (settingsTimer) { clearTimeout(settingsTimer); }
+    settingsTimer = setTimeout(function () { settingsTimer = null; persistCallSettings(false); }, 400);
+  }
+
+  function saveSettings() { schedulePersistSettings(); syncOverlay(); }
+
+  /* ---------- 事件 ---------- */
+  modeSel.addEventListener('change', function () {
+    inUtt = false; utt = []; ring = []; pttDown = false;
+    talkBtn.classList.remove('on');
+    syncTalkBtn(); syncOverlay();
+    setHint(modeSel.value === 'ptt' ? '按住大按钮说话，松开结束。'
+                                    : '直接说话，停顿一下自动接话；播放时再开口会打断。');
+    saveSettings();
+  });
+  roleSel.addEventListener('change', function () { targetChoice = readTargetChoice(); refreshTargets(); syncOverlay(); });
+  targetSel.addEventListener('change', function () { selectTarget(targetSel.value); });
+  if (pickBtn) { pickBtn.addEventListener('click', function (e) { e.stopPropagation(); openPicker(); }); }
+  if (pickSearchEl) { pickSearchEl.addEventListener('input', function () { pickPage = 1; renderPicker(); }); }
+  if (pickSortEl) { pickSortEl.addEventListener('change', function () { pickPage = 1; renderPicker(); }); }
+  if (pickDaysEl) { pickDaysEl.addEventListener('change', function () { pickPage = 1; renderPicker(); }); }
+  if (pickPrevBtn) { pickPrevBtn.addEventListener('click', function () { pickPage -= 1; renderPicker(); }); }
+  if (pickNextBtn) { pickNextBtn.addEventListener('click', function () { pickPage += 1; renderPicker(); }); }
+  document.addEventListener('click', function (e) {
+    if (picker && picker.classList.contains('open') && !picker.contains(e.target) && e.target !== pickBtn) {
+      closePicker();
+    }
+  });
+  var replacePicker = function () { if (picker && picker.classList.contains('open')) { placePicker(); } };
+  window.addEventListener('resize', replacePicker);
+  window.addEventListener('scroll', replacePicker, true);
+  sens.addEventListener('input', function () { sensVal.textContent = sens.value; saveSettings(); });
+  sil.addEventListener('input', function () { silVal.textContent = sil.value; saveSettings(); });
+  retSel.addEventListener('change', saveSettings);
+  langSel.addEventListener('change', saveSettings);
+  remChk.addEventListener('change', saveSettings);
+  bargeChk.addEventListener('change', saveSettings);
+
+  talkBtn.addEventListener('pointerdown', function (ev) {
+    ev.preventDefault();
+    if (modeSel.value === 'ptt') {
+      if (!calling) { sys('先点上面的按钮开始通话：切到全双工模式就是点一次开始。'); return; }
+      pttDown = true; utt = []; uttMs = 0; inUtt = false;
+      talkBtn.classList.add('on'); setHint('正在听……松开发出去。'); setStatus('在听你说…');
+      return;
+    }
+    toggleCall();
+  });
+  talkBtn.addEventListener('pointerup', function () {
+    if (modeSel.value !== 'ptt' || !pttDown) { return; }
+    pttDown = false;
+    talkBtn.classList.remove('on');
+    finishUtt();
+  });
+  talkBtn.addEventListener('pointercancel', function () {
+    if (modeSel.value === 'ptt' && pttDown) { pttDown = false; utt = []; talkBtn.classList.remove('on'); }
+  });
+  talkBtn.addEventListener('click', function (ev) { ev.preventDefault(); });
+
+  $('hangup').addEventListener('click', hangup);
+  $('mute').addEventListener('click', function () {
+    micMuted = !micMuted;
+    $('mute').textContent = micMuted ? '取消静音' : '麦克风静音';
+    syncOverlay();
+    setStatus(micMuted ? '麦克风已静音' : '待机');
+  });
+  $('popout').addEventListener('click', function () {
+    if (!hostDoc()) { setHint('这个页面没有宿主窗口（直接在浏览器里打开插件页时没有悬浮窗）。'); return; }
+    showOverlay();
+  });
+  $('replay').addEventListener('click', function () { playList(lastList); });
+  $('send').addEventListener('click', function () {
+    var t = (typed.value || '').trim();
+    if (!t) { return; }
+    typed.value = '';
+    enqueue({ character_key: roleSel.value, audio: '', text: t, lang: langSel.value,
+              retention: retSel.value, remember: remChk.checked,
+              target_session: targetSession(), multi: true, max_sentences: 3 });
+  });
+  typed.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { $('send').click(); } });
+  window.addEventListener('beforeunload', teardown);
+  window.addEventListener('pagehide', teardown);
+  window.addEventListener('unload', teardown);
+  /* 宿主重新渲染把悬浮窗冲掉时补回来；只补自己接管的那个，不去抢别人的节点 */
+  setInterval(function () {
+    if (!owns() || !overlay || overlayHidden) { return; }
+    if (!overlay.root.isConnected || !overlay.doc.contains(overlay.root)) { buildOverlay(); }
+  }, 3000);
+
+  loadStatus().then(loadPluginSettings);
+  if (hostDoc()) { buildOverlay(); }
+})();
+</script>
+</body>
+</html>

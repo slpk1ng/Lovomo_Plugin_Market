@@ -23,6 +23,29 @@
       "updated": "2026-09-24"
     },
     {
+      "id": "lovomo_call",
+      "name": "语音通话",
+      "version": "1.0.0",
+      "author": "Slpk1ng",
+      "github": "",
+      "description": "在浏览器里和角色打电话：说话→识别→角色回复→语音播回，可云可本地",
+      "type": "mixed",
+      "tags": [
+        "扩展",
+        "语音",
+        "通话"
+      ],
+      "category": "扩展",
+      "folder": "plugins/扩展/lovomo_call",
+      "homepage": "https://github.com/slpk1ng/Lovomo_Plugin_Market/tree/main/plugins/扩展/lovomo_call",
+      "page_url": "https://github.com/slpk1ng/Lovomo_Plugin_Market/tree/main/plugins/扩展/lovomo_call",
+      "source_repo": "slpk1ng/Lovomo_Plugin_Market",
+      "download": "https://github.com/slpk1ng/Lovomo_Plugin_Market/releases/download/lovomo_call-v1.0.0/lovomo_call-1.0.0.zip",
+      "logo_url": "https://raw.githubusercontent.com/slpk1ng/Lovomo_Plugin_Market/main/plugins/扩展/lovomo_call/logo.png",
+      "icon_url": "https://raw.githubusercontent.com/slpk1ng/Lovomo_Plugin_Market/main/plugins/扩展/lovomo_call/icon.png",
+      "updated": "2026-10-16"
+    },
+    {
       "id": "meow-skin",
       "name": "喵喵皮肤・回复追加",
       "version": "1.0.1",
@@ -48,5 +71,5 @@
     }
   ],
   "version": 2,
-  "updated": "2026-09-24"
+  "updated": "2026-10-16"
 }
